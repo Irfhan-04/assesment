@@ -1,146 +1,61 @@
-# Task 1: Product Scoping — Decision Record
+# Task 1: Product Scoping — README
 
-**Product:** ChannelPulse — Internal Marketing Performance Dashboard
-**Author:** Irfhan Ahamed
-**Version:** V1
-
-This document explains the decisions behind `product-brief.md` and `v1-scope.md`. Not what
-was built — why it was built that way, what alternatives were considered, and what changes
-with more time or information.
+**Product:** ChannelPulse — Internal Marketing Performance Dashboard  
+**Author:** Irfhan Ahamed  
+**Assessment:** Data & AI Product Engineer — Tacheon x Smacient  
 
 ---
 
-## The Decision That Shaped Everything: Primary User Is the Internal Analyst
+## What I Decided and Why
 
-The brief does not name a primary user. It describes a problem: one person manually
-pulling data from three platforms and stitching it together. That person is the internal
-analyst.
+**Primary user: the internal analyst, not the client.**
 
-Building for the client first was the obvious alternative. A client-facing dashboard
-looks like more product value — it is visible, it is the thing the business cares about.
-But it is the wrong starting point for two reasons.
+The problem as described is an internal workflow problem. One person on the team is spending 30–90 minutes manually stitching data from three platforms every time the performance question comes up. That friction lives inside the team, not at the client interface. Scoping V1 for the client would have required solving authentication, multi-brand data isolation, and client-appropriate presentation before validating that the underlying data layer is trustworthy. That is a V2 problem set. V1 eliminates the internal manual work. Once the internal team trusts the numbers, client access becomes a sharing permission, not an architecture rebuild.
 
-First, the friction described in the brief is internal. The analyst's 30–90 minutes per
-request is the problem worth solving. If you build the client-facing view before validating
-the underlying data, you are adding polish to something unvalidated. A client who sees a
-number that contradicts their platform view loses trust in the tool — and in the agency.
+**Tool form: Looker Studio dashboard connected to a BigQuery view.**
 
-Second, clients should see data the internal team already trusts. V1 builds that trust.
-V2 exposes it.
+The binding constraint — the team will not change their existing tools — immediately pointed toward the Google ecosystem. If the team uses Google Workspace (which a BigQuery-heavy firm almost certainly does), Looker Studio is already available at no additional cost. No new login, no new subscription, no onboarding. The dashboard is a URL. This constraint ruled out every SaaS analytics platform and every custom-built dashboard option simultaneously.
 
-Once the primary user decision is made, the tool form follows directly. The analyst needs
-fast access to accurate numbers. She already uses Google Workspace. A URL she can open
-without logging in, backed by a daily-refreshed BigQuery view, solves her problem with
-zero new adoption cost.
+**Three channels in V1: Paid Search, Paid Social, Organic Web.**
 
----
+These three account for the majority of measurable marketing spend and traffic for agency clients running standard campaigns. Each additional channel (LinkedIn, TikTok, email) follows the identical engineering pattern — a new connector, not a new architecture. Starting with three means V1 ships and gets validated before the scope grows.
 
-## Tool Form: Looker Studio + BigQuery
+**Four metrics per channel: Clicks or Sessions, Conversions, Spend, ROAS or CPC.**
 
-Three alternatives were considered and rejected:
+These four answer the core question. Impressions, CTR, CPM, and frequency were explicitly excluded — they describe reach and attention, not outcomes, and they add noise to a channel-level status check. If an analyst needs impressions data, they can open the platform directly. The dashboard should not try to be the platform.
 
-**Custom React dashboard:** Gives full control over logic and presentation. Requires
-hosting, deployment, ongoing maintenance, and a new URL the team has to remember. Violates
-the binding constraint — the team will not change their tools or add new workflows.
+**Rolling 7-day and 30-day windows only.**
 
-**SaaS analytics tool (Metabase, Grafana, Tableau):** Polished and capable. Requires a
-new subscription, a new login, and onboarding. Violates the same constraint.
+These answer "right now" and "this month." Calendar-week and calendar-month views are better for formatted reporting (nicer-looking numbers that align with invoice periods) but rolling windows are better for operational decisions. V1 is an operational tool.
 
-**Google Sheets via Connected Sheets:** Seriously considered. Zero adoption cost, already
-in Google Workspace, familiar to the analyst. Rejected because Looker Studio handles the
-date range toggle, visual layout, and sharing link pattern more cleanly for a dashboard
-use case. Sheets is the right answer if the output is a tabular report. A channel
-comparison dashboard is not a table.
+**Platform-native metric definitions, not normalized cross-channel metrics.**
 
-Looker Studio wins because it is already in the team's orbit, requires no new subscription,
-no deployment, and no training. The dashboard is a URL. That is the entire UX ask.
-
----
-
-## V1 Scope Boundaries
-
-**Three channels, not four or five.** The engineering pattern for adding a fourth channel
-is identical to adding the third — a new connector, a new view column, a new dashboard
-panel. There is no architectural reason to limit to three. The reason is to validate the
-pattern with three before scaling it. Every channel added in V1 adds a new dependency that
-could block the launch.
-
-**Four metrics per channel.** Clicks/Sessions, Conversions, Spend, ROAS/CPC answer the
-core question. Impressions and CTR describe reach, not performance. Frequency and CPM are
-optimisation inputs, not status-check outputs. Adding them adds noise to a question that
-has a clean four-metric answer.
-
-**Single client.** The argument for multi-client from the start is: "if you build it for
-one, design it for N." The counter-argument: adding `brand_id` and a row-level access
-policy to the BigQuery schema is two hours of engineering in V2, not a full rearchitect.
-Starting with one client is risk management. It lets V1 launch and get validated before
-multiplying the failure surface.
+Google Ads and Meta Ads use different default attribution models. Google defaults to data-driven attribution; Meta defaults to a 7-day click plus 1-day view window. If the pipeline ingests conversions from both platforms without standardizing the attribution window, the "Conversions" column across channels is not a direct apples-to-apples comparison. V1 uses platform-native definitions — this is faster to build and easier to audit ("does this match what I see in Google Ads?"), but it requires the analyst to understand that cross-channel conversion comparisons carry an implicit caveat. This is documented as an open question rather than a V1 design decision.
 
 ---
 
 ## What I Would Revisit With More Time
 
-**The Meta Ads connector.** Google Ads and GA4 both have native BigQuery exports — link
-once in the platform admin, no code required. Meta Ads does not. The V1 assumption is a
-manual CSV export or an existing Supermetrics subscription. Before finalising the V1 build
-plan, I would confirm whether Supermetrics is already in the team's stack. If not, the
-Meta Ads connector needs to be scoped explicitly — either a first-party Python connector
-against the Meta Marketing API (same pattern as Task 2) or a third-party tool.
+**Attribution window standardisation.** The V1 dashboard shows platform-native conversions, which means Paid Search and Paid Social conversions are not directly comparable without a caveat. A V1.1 decision is whether to document the difference prominently in the dashboard UI, or to standardize both channels to a single attribution window (typically last-click) before the pipeline loads the data. The right answer depends on the clients' reporting requirements — it cannot be made without that context.
 
-**Metric definition alignment per brand.** "Conversions" means different things across
-platforms: Google Ads conversion actions, Meta campaign objective results, GA4 goal
-completions. I assumed these are aligned per client before the pipeline is built. In
-practice this requires a documented per-brand metric definitions table — exactly which
-GA4 goal, which Google Ads conversion action, which Meta objective maps to "conversions"
-for each client. Without this locked down, two analysts can look at the same dashboard
-number and interpret it differently.
+**Meta conversion finalization lag.** Meta finalizes some conversion metrics up to 48 hours after the event. A pipeline running daily at 06:00 UTC will load yesterday's Meta data before some conversions are finalized. This means yesterday's Paid Social conversion count may increase by today's run. A more robust approach is to load Meta data with a 48-hour offset — displaying data from two days ago as "final" rather than yesterday as "preliminary." The last-updated timestamp partially addresses the trust problem, but not the accuracy problem.
 
-**The client-facing timeline.** I scoped client access as V2 without knowing how quickly
-the business needs it. If client-facing data access is a Q2 priority, that constraint
-should influence the V1 BigQuery schema design — specifically whether row-level security
-is designed in from day one or retrofitted later. A four-week difference in V2 timeline
-can change whether the V1 schema is a foundation or a rework.
+**Period-over-period comparison.** I listed this as Should Have rather than Must Have because it requires two complete periods of clean pipeline history before it displays a meaningful delta. On day one, there is no prior period. Displaying a delta against an empty baseline would either error silently or show a misleading zero. I would include this in V1.1 after the first full week of pipeline data is confirmed clean.
+
+**Stale data indicator.** If the pipeline has not run in more than 26 hours, the dashboard should surface a visible warning. This is technically trivial (a conditional formatting rule against `MAX(fetched_at)`), but it requires defining what "stale" looks like in practice — which requires the pipeline to run for at least a week before the threshold is meaningful.
 
 ---
 
-## Key Trade-offs Made
+## Key Trade-offs I Made
 
-**WRITE_APPEND over WRITE_TRUNCATE.** WRITE_APPEND with a `fetched_at` timestamp gives
-every pipeline run a version key. All summary queries use `WHERE fetched_at = MAX(fetched_at)`
-to operate on the latest snapshot. The trade-off is a slightly more complex query pattern
-in exchange for time-series capability with no additional engineering. For any scheduled
-pipeline, this is the correct default — WRITE_TRUNCATE loses history that cannot be
-recovered.
+**Simplicity over completeness.** V1 shows three channels and four metrics. There are dozens of metrics available across these three platforms. I chose the four that answer the stated question. The remaining metrics can be added without architectural change — they are additive columns, not redesigns.
 
-**Daily refresh over near-real-time.** GA4 has a 24–48 hour processing delay for some
-events. Google Ads conversion attribution can lag up to 72 hours. Meta's Ads Insights
-data is not final until 48 hours post-delivery. Daily refresh is honest. Near-real-time
-would require surfacing numbers that the source platforms themselves have not finalised.
-The last-updated timestamp visible on every dashboard page is the communication layer
-that makes this trade-off acceptable.
+**Internal trust over client access.** V1 is not client-facing. This delays a feature that could generate visible value for clients in order to build the data quality foundation that makes that feature credible when it ships. Wrong numbers sent to a client early cause more damage than a delayed self-service feature.
 
-**Looker Studio's design constraints over full presentation control.** Looker Studio
-imposes its own design language and limits what custom logic can live in the presentation
-layer. A custom dashboard can display anything the data supports. The binding constraint
-("the team will not change tools") made this easy — the question was never "custom vs.
-Looker Studio." It was "Looker Studio or nothing deployable in V1."
+**Daily refresh over real-time.** GA4, Google Ads, and Meta all have processing lags of 24–72 hours for certain metrics. "Real-time" is not achievable from these sources without significant engineering complexity and the risk of showing preliminary numbers as final. Daily refresh is both achievable and honest. The last-updated timestamp is the transparency mechanism.
 
 ---
 
-## What Was Explicitly Ruled Out and Why
+## What I Explicitly Ruled Out
 
-The full reasoning for every out-of-scope decision is in `v1-scope.md`. The three most
-consequential exclusions:
-
-**Recommendations.** A recommendation built on uncalibrated benchmarks is a confident
-wrong answer. Wrong answers damage trust faster than no answer. V2, after 8+ weeks of
-clean history, is when calibration is possible.
-
-**Automated alerting.** Alerts before a baseline exists generate noise. The first false
-alert in week one of a new tool is the fastest path to the tool being ignored. V2,
-after 30 days of clean pipeline data, is when thresholds can be set with confidence.
-
-**Campaign-level drill-down.** The brief names one question: "how is marketing performing
-across channels." Campaign-level data answers a different question — why a specific channel
-is performing the way it is. Adding it to V1 solves a problem the brief did not name while
-increasing dashboard complexity for the problem it did name.
+Every V1 exclusion is in `v1-scope.md` with explicit reasoning. The organizing principle: anything that requires the data to be trusted before it can be implemented — recommendations, automated alerting, client access — was excluded in favour of building the data layer and validating it internally first. You cannot recommend on data that has not been verified. You cannot alert on thresholds that have not been calibrated.

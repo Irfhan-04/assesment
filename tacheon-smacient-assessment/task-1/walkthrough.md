@@ -1,139 +1,60 @@
 # Task 1: Walkthrough
 
-This narrative covers the thinking process behind the scope decisions for ChannelPulse V1.
-It reads in the order decisions were made, not in the order the documents are structured.
+**Author:** Irfhan Ahamed  
+**Assessment:** Data & AI Product Engineer — Tacheon x Smacient  
 
 ---
 
 ## Where I Started
 
-The brief gives one question the tool must answer: *"How is our marketing performing across
-channels right now, and where should we be focusing?"*
+The brief asks for a tool that answers two questions: "how is our marketing performing across channels right now?" and "where should we be focusing?" I initially read these as two separate design problems. They are not. The second question is downstream of the first — you can only answer "where to focus" if you trust the answer to "how are we doing." So I scoped toward the first question and deferred the second.
 
-The first thing I did was split that question in two. "Right now" is a data retrieval
-problem — reliable pipeline, consistent schema, accurate numbers available without manual
-work. "Where should we be focusing" is a recommendation problem — it requires normalised
-benchmarks, historical context, and business rules calibrated per client.
+That meant the product I was designing was not a recommendation engine. It was a reliable data surface. That distinction shaped every decision that followed.
 
-V1 can only credibly solve one of those. A recommendation engine built before the
-underlying data is trusted is not a recommendation engine — it is a liability. If the
-numbers are wrong, the recommendation is confidently wrong. That is worse than no
-recommendation.
+## The Decision That Shaped Everything
 
-So V1 solves "right now." Everything in the scope follows from that choice.
+The single most important call I made was naming the primary user: the internal analyst, not the client.
 
----
+The problem as described is entirely internal. One person is spending 30–90 minutes manually pulling and reconciling data from three platforms every time the performance question comes up. That person is the analyst. The client does not have that friction — they just wait for the answer. The analyst generates it.
 
-## The Primary User Decision
+If I had scoped V1 for the client, I would have needed to solve multi-brand access control, authentication, and client-appropriate presentation before validating that the underlying data is even trustworthy. That adds two to three weeks of scope before the first user gets any value. V1 solves the internal problem. Once the internal team trusts the numbers, giving a client access is a shared link, not a rebuild.
 
-The brief does not name a user. The problem it describes — one analyst spending 30–90
-minutes pulling and stitching data per request — names the user indirectly. The person
-doing that manual work is the primary user.
+## How I Determined V1 Scope
 
-I considered building for the client first. The argument is superficially compelling:
-client visibility is what the business cares about, client-facing features are what
-gets noticed, starting there creates immediate external value. I rejected it for two
-reasons.
+I started from the hard constraint — the team will not change their existing tools — and worked outward.
 
-The brief describes an internal problem, not a client experience problem. The friction
-is inside the team before it ever reaches a client interface. Solving it requires fixing
-the internal data layer. You cannot build client-facing trust on an internal data layer
-that has not been validated.
+That constraint immediately pointed toward the Google ecosystem. The firm is BigQuery-heavy by context. If the team uses Google Workspace, Looker Studio is already available at no cost. No new login. No new subscription. No onboarding. The tool form chose itself before I finished reading the brief.
 
-And: clients should see data the internal team already trusts. The sequence matters.
-V1 builds internal trust. V2 surfaces it externally.
+From there, I picked channels by coverage and engineering cost. Paid Search, Paid Social, and Organic Web account for the majority of measurable spend and traffic for any agency client running standard campaigns. Each additional channel follows the same pipeline pattern — a new connector, not a new architecture. Starting with three means V1 ships and gets validated. Starting with six means V1 ships late or not at all.
 
-Once I committed to the internal analyst as the primary user, the tool form became
-obvious. She already uses Google Workspace. She needs a URL she can open without
-logging in. She needs numbers that match what she would find manually. Looker Studio
-connected to BigQuery satisfies all three of those with zero new adoption cost.
+For metrics, I held a strict filter: does this metric answer the question "how is marketing performing right now?" Impressions and CTR failed that filter. They describe attention, not outcomes. If an analyst needs impressions data for a specific client conversation, they can open the platform. The dashboard's job is to answer the operational question, not to replicate every view available in every platform.
 
----
+## What I Almost Included But Didn't
 
-## How I Worked Out V1 Scope
+Two decisions gave me genuine pause before I cut them.
 
-I started with the minimum that makes the core question answerable and worked outward.
+**Period-over-period comparison.** Showing last week versus the prior week felt like an obvious inclusion — it requires no new data sources, just two rolling windows. I moved it from Must Have to Should Have for one specific reason: on launch day, the pipeline has only run once. There is no prior period. Displaying a delta against a missing baseline either errors or shows zero, which is actively misleading. I do not want the dashboard to show a wrong number on day one to avoid admitting a feature is not ready. The visual layout supports adding period-over-period as soon as the second week of clean data is confirmed.
 
-The core question is a comparison: "which channel is performing best right now." You
-cannot answer a comparison question with a single channel. Three channels — Paid Search,
-Paid Social, Organic Web — is the minimum that makes the comparison meaningful and covers
-where most clients concentrate budget and measurable traffic.
+**Attribution model mismatch.** During research, I found that Google Ads and Meta Ads use different default attribution windows — Google defaults to data-driven attribution, Meta defaults to 7-day click plus 1-day view. If the pipeline ingests conversions from both without normalizing the attribution window, the "Conversions" column across those two channels is not a direct comparison. It is comparing apples and attribution-adjusted oranges.
 
-Four metrics per channel came from the same logic. The question has four natural
-dimensions for a paid channel: how much traffic (clicks), how much outcome (conversions),
-how much cost (spend), and how efficient (ROAS or CPC). Dropping any one leaves a gap.
-Adding impressions, CTR, or frequency adds noise — those metrics explain the four, they
-do not replace them.
+I decided not to solve this in V1, but I did not ignore it. The correct V1 approach is to use platform-native metric definitions — this is faster to build and easier to audit — and to document the limitation explicitly. The analyst using this dashboard needs to know that cross-channel conversion comparisons carry a caveat until the attribution windows are standardized per brand. A note in the README and a tooltip in the dashboard carry that information without requiring weeks of additional spec work before anything ships.
 
-Single client for V1 was the decision I expected to defend most. The counterargument is
-"design for N from the start." My answer: adding `brand_id` to the BigQuery schema and
-a row-level access policy is two hours of engineering. It is not a rearchitect. Starting
-with one client is not a technical limitation — it is a scope decision that lets V1
-launch, get validated, and earn the right to V2 complexity.
+A related issue that I flagged separately: Meta finalizes some conversion metrics up to 48 hours after the event. A pipeline running at 06:00 UTC daily loads yesterday's Meta data before some conversions have finished processing. This means yesterday's Paid Social conversion count shown in the dashboard may be understated. The last-updated timestamp tells the user how old the data is, but it does not tell them that the numbers from two days ago are more reliable than yesterday's numbers. That is a data communication problem, not a pipeline design problem — but it warrants a visible note in the dashboard.
 
----
+## What Would Change in V2
 
-## What I Almost Included
+Multi-brand support is the natural next feature, but it requires a different BigQuery schema: a `brand_id` key on every table, row-level security policies, and per-brand Looker Studio reports rather than a single shared dashboard. The V1 architecture supports this as an extension — it is a new column and a new access layer, not a schema redesign.
 
-**Automated alerting.** This was the hardest exclusion. The brief explicitly names "where
-should we be focusing" — and an alert on a spend spike or a conversion drop is a direct
-answer to that. I excluded it because alerts require thresholds, thresholds require a
-baseline, and a baseline requires trusting the data first. A false alert in week one —
-fired because the data itself is inconsistent, not because performance changed — is the
-fastest way to kill adoption of a new tool. The team will start ignoring the alerts, and
-once alerts are ignored, the alerting system has negative value.
+Automated recommendations — "where should we focus?" — require a baseline. The pipeline needs to run cleanly for four to eight weeks before any threshold or benchmark is meaningful. I explicitly scoped this out of V1 because a wrong recommendation damages trust faster than no recommendation. The data layer comes first.
 
-**Campaign-level drill-down.** The brief names one question at the channel level. Campaign-
-level answers a different question — which specific campaign within a channel to investigate.
-That is an analyst optimisation tool, not a status-check tool. Including it adds dashboard
-complexity for a use case the brief did not name. I wanted to include it. I cut it.
+Alerting follows the same logic. You need to know what "normal" looks like before you can alert on anomalies. Four weeks of clean history establishes that. Alerting before that point generates noise.
 
-**Week-over-week delta indicators.** These are genuinely useful and not hard to build —
-two more columns in the BigQuery view. I deferred them to V2 because they require two
-consecutive weeks of pipeline history before the numbers mean anything. In the first week
-of V1, a delta indicator would show N/A or compare against incomplete data. V2, after two
-full weeks of history, is the right time.
+## What I'd Want to Validate Before Building Anything
 
----
+Three things need to be confirmed before a single line of pipeline code is written for the production marketing version of this tool:
 
-## What V2 Looks Like
+**Metric definitions per brand.** What counts as a conversion in GA4 for this client? What counts as a "result" in Meta for this campaign objective? These are not universal — they are configured differently per account and per campaign goal. Schema is expensive to change. Metric definitions need to be locked before schema is finalized.
 
-V2 has three priorities in order:
+**GA4 and Google Ads BigQuery linking status.** Both have free native exports to BigQuery. If they are not yet linked, that is a 1–2 day setup task that must happen before any pipeline work begins. It is not a blocker, but it is a dependency that can silently delay V1 if it is discovered late.
 
-The Meta Ads connector needs a real solution. Google Ads and GA4 both have native BigQuery
-exports that require no custom code. Meta does not. V1 uses a manual CSV export as an
-interim. V2 either builds a first-party Python connector against the Meta Marketing API
-(same pattern as Task 2) or confirms a third-party connector is already in the team's
-subscription.
-
-Multi-brand support. Once V1 is validated with one client, adding `brand_id` to the
-schema, a row-level access policy in BigQuery, and a brand selector in Looker Studio
-is under a day of engineering. The architecture already supports it. V2 just turns it on.
-
-Period-over-period deltas and trend indicators. After 30+ days of history, these become
-meaningful. Week-over-week and month-over-month comparisons turn the dashboard from
-"what is the number" to "is the number moving in the right direction."
-
----
-
-## What I Would Validate Before Writing a Line of Pipeline Code
-
-Three questions need answers before any engineering starts:
-
-What is a "conversion" for each brand in each channel? This definition must be locked
-before the schema is designed. Google Ads conversion actions, Meta campaign objective
-results, and GA4 goal completions are all called "conversions" in their respective
-platforms. They are not the same thing. The schema needs a `conversion_definition` field
-or a documented mapping — not assumptions.
-
-Is GA4 already linked to BigQuery? If yes, the organic data pipeline is a BigQuery view
-on an existing export, not an API integration. If no, linking is free and takes ten
-minutes in GA4 Admin — but it needs to happen before the pipeline architecture is
-finalised.
-
-Does the team already pay for Supermetrics or a similar connector? If yes, the Meta Ads
-problem is already solved. If no, the Meta Ads connector is a V1 build dependency that
-needs explicit scoping before the sprint starts.
-
-These three answers change the build plan more than any architecture decision in this
-scope document.
+**Attribution window alignment decision.** The team needs to make a call: show platform-native attribution for speed, or standardize to a single window for cross-channel comparability. V1 uses platform-native. V2 should revisit this with actual data in hand, because the right answer depends on how clients actually use the comparison — something that requires using V1 for a month to understand.
