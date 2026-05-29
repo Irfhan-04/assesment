@@ -1,7 +1,7 @@
 # Product Brief: ChannelPulse
 ## Internal Marketing Performance Dashboard
 
-**Author:** [Your Name]  
+**Author:** Irfhan Ahamed  
 **Version:** V1  
 **Prepared for:** Tacheon x Smacient — Data & AI Product Engineer Assessment
 
