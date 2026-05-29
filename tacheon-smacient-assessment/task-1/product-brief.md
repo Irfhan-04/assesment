@@ -1,7 +1,7 @@
 # Product Brief: ChannelPulse
 ## Internal Marketing Performance Dashboard
 
-**Author:** Irfhan Ahamed
+**Author:** [Your Name]  
 **Version:** V1  
 **Prepared for:** Tacheon x Smacient — Data & AI Product Engineer Assessment
 
@@ -17,15 +17,23 @@ Ads, and Meta Ads Manager — pulls numbers, reconciles date ranges, and stitche
 into a Notion doc or spreadsheet. The cycle takes 30 to 90 minutes per request and runs 
 2–3 times per week. If the analyst is unavailable, the question goes unanswered.
 
-The output looks different every time. Different analysts choose different date windows, 
-different metrics, different formats. Two people answering the same question on the same 
-day can produce numbers that differ by 10–15%. Over time, this inconsistency erodes trust 
-in the numbers — even when the underlying data is accurate.
+The output looks different every time. This is not only a formatting problem — it is an 
+architectural one. Each platform uses a different attribution model: Meta reports on a 
+7-day click + 1-day view-through window; Google Ads uses last-click with a 30-day 
+lookback; GA4 uses data-driven attribution across a 90-day window. A 20–40% gap between 
+platform-reported conversions is structurally normal. Teams that manually consolidate 
+across these platforms without acknowledging this end up in arguments about which number 
+is "right" rather than acting on what any of them is telling them.
 
-The root cause is not inefficiency. It is the absence of an automated, canonical data 
-layer. No pipeline fetches data from these platforms on a schedule. No unified schema maps 
-platform-specific metrics to consistent definitions. No shared view accumulates the work 
-of previous pulls so that answering the question this week reduces the effort next week.
+The problem compounds further with metric naming: Meta calls conversions "Results," 
+Google calls them "Conversions," GA4 calls them "Goal Completions." Each pull requires 
+institutional knowledge to normalize. When the person with that knowledge is unavailable, 
+the data is untrustworthy to anyone else.
+
+The root cause is the absence of an automated, canonical layer that surfaces each 
+platform's self-reported numbers in one place, with consistent labels and a visible 
+freshness timestamp — without pretending to resolve the attribution differences that are 
+inherent to the ecosystem.
 
 ---
 
@@ -53,10 +61,10 @@ The binding constraint is that the team will not change their existing tools or 
 This rules out asking them to adopt a new SaaS analytics platform, learn a new interface, 
 or run anything manually on a schedule.
 
-Looker Studio is already available to any team using Google Workspace — no new subscription, 
-no new login, no deployment. If Tacheon is already in the GCP ecosystem (which the 
-assessment context suggests), this is zero incremental tool adoption. The dashboard is a 
-URL. The analyst opens it. That is the full interaction.
+Looker Studio is the standard reporting layer for small-to-mid-size marketing agencies 
+already operating in the Google ecosystem. It requires no new subscription, no new login, 
+and connects natively to BigQuery at no additional cost. The dashboard is a URL. 
+The analyst opens it. That is the full interaction.
 
 The data layer — a BigQuery dataset with one view per channel, joined into a unified 
 summary view — is invisible infrastructure. The team never touches it directly after setup.
@@ -79,7 +87,12 @@ That is the interaction. Everything in V1 is designed to make that interaction r
 
 ## What the Tool Needs to Work
 
-The dashboard reads from a BigQuery dataset that aggregates data from three channels:
+The dashboard reads from a BigQuery dataset that aggregates data from three channels. 
+A critical architectural decision: paid metrics come from their native platform, not from 
+GA4. Google Ads ROAS and spend are sourced from Google Ads. Meta ROAS and spend are 
+sourced from Meta. GA4 is the source only for Organic Web sessions and conversions. 
+This prevents attribution model conflicts from corrupting the data — each platform reports 
+its own numbers, and the dashboard displays them as such.
 
 **Google Ads → BigQuery:** Native export available in Google Ads settings at no cost. 
 Google pushes daily performance data to a specified BigQuery dataset automatically once 
@@ -93,11 +106,11 @@ a custom Python connector following the same pattern as the Task 2 pipeline, or 
 third-party connector (Supermetrics, Funnel.io) if the team already subscribes.
 
 Once these three sources land in BigQuery, a unified summary view joins them on a common 
-schema. Looker Studio reads from that view. The analyst opens a URL.
+schema with standardized metric labels. Looker Studio reads from that view.
 
 **Data refresh:** Daily at minimum (05:00 UTC, data available by 06:00 UTC). The 
 last-updated timestamp is visible on every page of the dashboard — this is the primary 
-trust mechanism. Analysts need to know how old the data is before they cite it.
+trust mechanism.
 
 **Access:** Read-only Looker Studio report shared via link. No login required for viewers. 
 No edit permissions granted to anyone outside the engineering team.
@@ -114,9 +127,12 @@ launch.
 Two team members use the dashboard to answer the performance question without being 
 prompted, within 4 weeks of launch.
 
-Dashboard data is within ±5% of platform-native numbers, verified by spot-check in week 2. 
-The tolerance accounts for API processing lag and attribution window differences across 
-platforms.
+Dashboard data matches each platform's native reporting within ±5%, verified by 
+spot-check in week 2. The ±5% tolerance accounts for the 24–48 hour data finalization 
+lag that platforms like Meta apply to their Ads Insights API.
+
+Metric labels are standardized and documented: "Conversions" is used across all three 
+channels, defined per-channel in the dashboard's data documentation.
 
 The last-updated timestamp is visible and accurate on every page from day 1.
 
@@ -124,9 +140,11 @@ The last-updated timestamp is visible and accurate on every page from day 1.
 
 ## What Is Deliberately Not In V1
 
-**Recommendations ("where should we focus"):** Correct recommendations require calibrated 
-benchmarks and historical context that take weeks to establish. A wrong recommendation 
-damages trust faster than no recommendation. V1 surfaces the data. The humans make the call.
+**Recommendations ("where should we focus"):** Each platform uses a structurally different 
+attribution model. Comparing ROAS from Meta to ROAS from Google Ads without normalizing 
+attribution is comparing incompatible numbers. Making recommendations from those numbers 
+before the attribution context is understood would produce misleading guidance. V1 
+surfaces the data. The analysts make the call with full knowledge of what each number means.
 
 **Automated alerting:** Alerts require thresholds. Thresholds require a baseline. 
 Alerting before the data is trusted produces noise, not signal. V2 feature.
@@ -136,5 +154,9 @@ and access management. V2 architecture decision. V1 validates the approach with 
 
 **Client-facing access:** V1 builds internal trust first. Clients see data after the 
 internal team has validated it for at least 4 weeks.
+
+**Cross-platform attribution normalization:** ChannelPulse does not attempt to resolve 
+the attribution differences between platforms. That requires a separate attribution 
+modeling project. The tool shows what each platform reports — clearly and consistently.
 
 The full reasoning for every out-of-scope decision is in `v1-scope.md`.
