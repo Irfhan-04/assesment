@@ -27,9 +27,9 @@ def load_config() -> dict:
               numeric values are cast to int before return.
     """
     required = [
-        "GCP_PROJECT_ID",
-        "BQ_DATASET_ID",
-        "BQ_TABLE_ID",
+        "gcp_project_id",
+        "bq_dataset_id",
+        "bq_table_id",
     ]
 
     config: dict = {}
