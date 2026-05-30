@@ -3,8 +3,6 @@
 -- All queries filter to MAX(fetched_at) to read the latest
 -- pipeline snapshot only. This is the standard pattern for
 -- WRITE_APPEND time-series tables.
---
--- Replace {project} and {dataset} with your actual values.
 -- ============================================================
 
 

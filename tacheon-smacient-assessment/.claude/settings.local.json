@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(.venv\\\\Scripts\\\\activate *)",
-      "Bash(uv pip *)"
-    ]
-  }
-}
