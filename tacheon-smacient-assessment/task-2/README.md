@@ -174,7 +174,7 @@ The following was confirmed in the BigQuery console:
 
 | Total Rows | First Run (UTC) | Latest Run (UTC) | Distinct Runs |
 |:----------:|-----------------|------------------|:-------------:|
-| 200 | 2026-05-30 07:01:30 | 2026-05-30 07:09:30 | 1 |
+| 200 | 2026-05-30 07:01:30 | 2026-05-30 07:09:30 | 2 |
 
 ---
 
